@@ -1,9 +1,9 @@
-﻿using FileCleanup.Services;
-using GalaSoft.MvvmLight;
+﻿using FileCleanup.Helpers;
+using FileCleanup.Services;
 
 namespace FileCleanup.ViewModels
 {
-    public class DialogViewModelBase<T> : ViewModelBase
+    public class DialogViewModelBase<T> : Observable
     {
         public string WindowTitle { get; set; }
         public string Message { get; set; }
@@ -11,8 +11,8 @@ namespace FileCleanup.ViewModels
 
         public DialogViewModelBase(string windowTitle, string message)
         {
-            this.WindowTitle = windowTitle;
-            this.Message = message;
+            WindowTitle = windowTitle;
+            Message = message;
         }
         public DialogViewModelBase(string windowTitle) : this(windowTitle, string.Empty) { }
         public DialogViewModelBase() : this(string.Empty, string.Empty) { }

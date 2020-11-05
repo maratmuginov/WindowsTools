@@ -1,62 +1,64 @@
-﻿using FileCleanup.ProgressModels;
+﻿using FileCleanup.Commands;
 using FileCleanup.Helpers;
 using FileCleanup.Models;
+using FileCleanup.ProgressModels;
+using FileCleanup.Services;
+using FileCleanupDataLib.Models;
+
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AsyncAwaitBestPractices.MVVM;
-using FileCleanup.Services;
-using FileCleanupDataLib.Models;
-using GalaSoft.MvvmLight.Command;
-using GalaSoft.MvvmLight;
+using System.Windows;
+using System.Windows.Input;
 
 namespace FileCleanup.ViewModels
 {
-    public class MainWindowViewModel : ViewModelBase
+    public class MainWindowViewModel : Observable
     {
         #region View Properties
 
         public bool IsScanning { get; set;}
         public string ScanningStatus { get; set; } = "Not Started";
 
-        private DateTime selectedDate = DateTime.Now.AddDays(-60);
+        private DateTime _selectedDate = DateTime.Now.AddDays(-60);
         public DateTime SelectedDate
         {
-            get => selectedDate;
+            get => _selectedDate;
             set
             {
-                selectedDate = value;
+                _selectedDate = value;
                 Configuration.LastAccessFlagDate = value;
             }
         }
 
-        private string size = "1";
+        private string _size = "1";
         public string Size
         {
-            get => size;
+            get => _size;
             set
             {
                 try
                 {
                     UpdateConfiguration(value);
-                    size = value;
+                    _size = value;
                 }
                 catch (Exception)
                 {
-                    size = "1000";
+                    _size = "1000";
                 }
             }
         }
 
-        private string selectedSizeType = "Gb";
+        private string _selectedSizeType = "Gb";
         public string SelectedSizeType
         {
-            get => selectedSizeType;
+            get => _selectedSizeType;
             set
             {
-                selectedSizeType = value;
+                _selectedSizeType = value;
                 UpdateConfiguration(Size);
             }
         }
@@ -71,29 +73,34 @@ namespace FileCleanup.ViewModels
         #endregion
 
         #region Commands
-        public RelayCommand CancelCommand { get; private set; }
-        public IAsyncCommand StartCommand { get; private set; }
-        public IAsyncCommand<string> OpenExplorerCommand { get; set; }
-        public IAsyncCommand<string> AddToScanListCommand { get; set; }
-        public IAsyncCommand<FileProps> AddToNoScanListCommand { get; set; }
-        public RelayCommand NewScanningProfileCommand { get; }
+        public ICommand CancelScanningCommand { get; }
+        public ICommand StartScanningCommand { get; }
+        public ICommand OpenExplorerCommand { get; }
+        public ICommand AddToScanListCommand { get; }
+        public ICommand AddToNoScanListCommand { get; }
+        public ICommand NewScanningProfileCommand { get; }
         #endregion
 
-        public MainWindowViewModel()
+        public MainWindowViewModel(IDialogService dialogService)
         {
-            CancelCommand = new RelayCommand(ExecuteCancelScanner, () => FileScanner.IsRunning);
-            StartCommand = new AsyncCommand(ExecuteStartScanner, _ => !FileScanner.IsRunning);
-            OpenExplorerCommand = new AsyncCommand<string>(OpenExplorer);
-            AddToScanListCommand = new AsyncCommand<string>(AddToScanList);
-            AddToNoScanListCommand = new AsyncCommand<FileProps>(AddToNoScanList);
-            NewScanningProfileCommand = new RelayCommand(NewScanningProfile);
-            TestConfiguration();
+            _dialogService = dialogService;
+
+            CancelScanningCommand = new RelayCmd(CancelScanning, () => FileScanner.IsRunning);
+            StartScanningCommand = new AsyncRelayCmd(StartScanning, () => !FileScanner.IsRunning);
+            OpenExplorerCommand = new RelayCmd<string>(OpenExplorer, ShowErrorMessageBox);
+            AddToScanListCommand = new RelayCmd<string>(AddToScanList, ShowErrorMessageBox);
+            AddToNoScanListCommand = new RelayCmd<FileProps>(AddToNoScanList, ShowErrorMessageBox);
+            NewScanningProfileCommand = new RelayCmd(NewScanningProfile);
+            Configuration = GetTestConfiguration();
             FileScanner = new FileScanner(Configuration);
             ScanProfiles = new ObservableCollection<CfgScanProfile>();
-            _dialogService = new DialogService();
         }
 
-        
+        private static void ShowErrorMessageBox(Exception exception)
+        {
+            //This could be moved to custom dialog.
+            MessageBox.Show(exception.Message, exception.GetType().ToString());
+        }
 
         public void UpdateConfiguration(string size)
         {
@@ -101,20 +108,18 @@ namespace FileCleanup.ViewModels
             FileScanner.UpdateConfiguration(Configuration);
         }
 
-        private void TestConfiguration()
+        private Configuration GetTestConfiguration() => new Configuration
         {
-            Configuration = new Configuration
-            {
-                ScanSystemFolders = false,
-                ScanProgramDataFolders = false,
-                ScanProgramFolders = false,
-                FlagFileSize = 100, //* 1000 * 1000, // Megabytes: regularly in bytes
-                LastAccessFlagDate = SelectedDate
-            };
-        }
+            ScanSystemFolders = false,
+            ScanProgramDataFolders = false,
+            ScanProgramFolders = false,
+            FlagFileSize = 100, //* 1000 * 1000, // Megabytes: regularly in bytes
+            LastAccessFlagDate = SelectedDate
+        };
 
-        public async Task ExecuteStartScanner()
+        public async Task StartScanning()
         {
+            IsScanning = true;
             var progress = new Progress<ScanProgress>();
             progress.ProgressChanged += UpdateProgress;
             try
@@ -128,54 +133,32 @@ namespace FileCleanup.ViewModels
             IsScanning = false;
         }
 
-        public async Task OpenExplorer(string fullPath)
+        public void OpenExplorer(string fullPath)
         {
-            try
-            {
-                Process.Start("explorer.exe", System.IO.Path.GetDirectoryName(fullPath));
-            }
-            catch (Exception ex)
-            {
-                //MessageBox.Show($"Error: {ex.Message}", "Error");
-            }
+            Process.Start("explorer.exe", Path.GetDirectoryName(fullPath));
         }
 
-        private async Task AddToNoScanList(FileProps file)
+        private void AddToNoScanList(FileProps file)
         {
-            try
-            {
-                if (!Configuration.PathsNotToScan.Contains(file.FullPath))
-                    Configuration.PathsNotToScan.Add(file.FullPath);
+            if (!Configuration.PathsNotToScan.Contains(file.FullPath))
+                Configuration.PathsNotToScan.Add(file.FullPath);
 
-                file.IsScanable = false;
-            }
-            catch (Exception ex)
-            {
-                //MessageBox.Show($"Error: {ex.Message}", "Error");
-            }
-
+            file.IsScanable = false;
         }
-        private async Task AddToScanList(string fullPath)
+        private void AddToScanList(string fullPath)
         {
-            try
+            if (!Configuration.PathsNotToScan.Contains(fullPath)) 
+                return;
+            
+            Configuration.PathsNotToScan.Remove(fullPath);
+            var dir = FileScanner.FlaggedDirectories.FirstOrDefault(f => f.FullPath == fullPath);
+            if (dir != null)
+                dir.IsScanable = true;
+            else
             {
-                if (Configuration.PathsNotToScan.Contains(fullPath))
-                {
-                    Configuration.PathsNotToScan.Remove(fullPath);
-                    var dir = FileScanner.FlaggedDirectories.FirstOrDefault(f => f.FullPath == fullPath);
-                    if (dir != null)
-                        dir.IsScanable = true;
-                    else
-                    {
-                        var file = FileScanner.FlaggedFiles.FirstOrDefault(f => f.FullPath == fullPath);
-                        if (file != null)
-                            file.IsScanable = true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                //MessageBox.Show($"Error: {ex.Message}", "Error");
+                var file = FileScanner.FlaggedFiles.FirstOrDefault(f => f.FullPath == fullPath);
+                if (file != null)
+                    file.IsScanable = true;
             }
         }
 
@@ -193,7 +176,7 @@ namespace FileCleanup.ViewModels
             }
         }
 
-        public void ExecuteCancelScanner()
+        public void CancelScanning()
         {
             FileScanner.CancelScan();
         }

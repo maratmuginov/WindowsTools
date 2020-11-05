@@ -1,32 +1,30 @@
 ﻿using FileCleanup.Models;
 using FileCleanup.ProgressModels;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FileCleanup.Extensions;
-using System.Windows.Media;
-using Newtonsoft.Json;
-using System.Net.Http;
-using GalaSoft.MvvmLight;
+using FileCleanup.Helpers;
 
 namespace FileCleanup.Services
 {
-    public class FileScanner : ViewModelBase
+    public class FileScanner : Observable
     {
         #region Properties
-        public ObservableCollection<FileProps> FlaggedFiles { get; private set; } = new ObservableCollection<FileProps>();
-        public ObservableCollection<FileProps> FlaggedDirectories { get; private set; } = new ObservableCollection<FileProps>();
-        public bool IsRunning => stopwatch.IsRunning;
-        public TimeSpan TimeElapsed => stopwatch.Elapsed;
+        public ObservableCollection<FileProps> FlaggedFiles { get; } = 
+            new ObservableCollection<FileProps>();
+        public ObservableCollection<FileProps> FlaggedDirectories { get; } = 
+            new ObservableCollection<FileProps>();
+        public bool IsRunning => _stopwatch.IsRunning;
+        public TimeSpan TimeElapsed => _stopwatch.Elapsed;
 
-        private CancellationTokenSource token = new CancellationTokenSource();
-        private Stopwatch stopwatch = new Stopwatch();
-        private Configuration Configuration;
+        private readonly CancellationTokenSource _token = new CancellationTokenSource();
+        private readonly Stopwatch _stopwatch = new Stopwatch();
+        private Configuration _configuration;
         #endregion
 
         public event EventHandler ScanComplete;
@@ -36,8 +34,8 @@ namespace FileCleanup.Services
 
         #region Constructors
         public FileScanner(long flagFileSize, DateTime flagLastAccessDate)
-        {            
-            Configuration = new Configuration
+        {
+            _configuration = new Configuration
             {
                 FlagFileSize = flagFileSize,
                 LastAccessFlagDate = flagLastAccessDate
@@ -46,23 +44,20 @@ namespace FileCleanup.Services
 
         public FileScanner(Configuration configuration)
         {
-            Configuration = configuration;
+            _configuration = configuration;
         }
         #endregion
 
         public void UpdateConfiguration(Configuration configuration)
         {
-            Configuration = configuration;
+            _configuration = configuration;
         }
 
-        public void CancelScan()
-        {
-            token.Cancel();
-        }
+        public void CancelScan() => _token.Cancel();
 
         public async Task StartScanner(IProgress<ScanProgress> progress)
         {
-            stopwatch.Restart();
+            _stopwatch.Restart();
             FlaggedDirectories.Clear();
             FlaggedFiles.Clear();
 
@@ -71,19 +66,19 @@ namespace FileCleanup.Services
             {
                 try
                 {
-                    await Scan(driveInfo.Name, progress, token.Token).ConfigureAwait(false);
+                    await Scan(driveInfo.Name, progress, _token.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
-                    var timeElapsed = stopwatch.Elapsed;
+                    var timeElapsed = _stopwatch.Elapsed;
                     OnScannerCancelled(timeElapsed);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
 
                 }
             }
-            stopwatch.Stop();
+            _stopwatch.Stop();
             OnScanComplete(EventArgs.Empty);
         }
 
@@ -93,7 +88,7 @@ namespace FileCleanup.Services
                 token.ThrowIfCancellationRequested();
 
             await Task.Delay(1);
-            RaisePropertyChanged(nameof(IsRunning));
+            OnPropertyChanged(nameof(IsRunning));
             foreach (var directory in Directory.GetDirectories(path))
             {
                 try
@@ -102,64 +97,50 @@ namespace FileCleanup.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Debug.Print(ex.Message);
                 }
             }
         }
 
-        private async Task ScanDirectory(string directory, IProgress<ScanProgress> progress, CancellationToken token)
+        private async Task ScanDirectory(string dirPath, IProgress<ScanProgress> progress, CancellationToken token)
         {
-            progress.Report(new ScanProgress(directory));
-            
+            progress.Report(new ScanProgress(dirPath));
 
-            if (DoNotScan(directory))
-                return;
+            var directory = new DirectoryInfo(dirPath);
+            if (CanAddDirectory(directory))
+                progress.Report(new ScanProgress(new FileProps(directory), false));
 
-            var directoryToAdd = new DirectoryInfo(directory);
-            if (CanAddDirectory(directoryToAdd))
-                progress.Report(new ScanProgress(new FileProps(directoryToAdd), false));
-
-            foreach (var file in Directory.GetFiles(directory))
+            foreach (var file in Directory.GetFiles(dirPath).Where(file => CanScanFile(file) && CanAddFile(file)))
             {
                 if (token.IsCancellationRequested)
                     token.ThrowIfCancellationRequested();
                 ScanFile(file, progress);
             }
-            await Scan(directory, progress, token);
+            await Scan(dirPath, progress, token);
         }
 
-        private void ScanFile(string file, IProgress<ScanProgress> progress)
+        private void ScanFile(string filePath, IProgress<ScanProgress> progress)
         {
-            if (DoNotScan(file))
-                return;
-
-            var fileToAdd = new FileInfo(file);
-            if (CanAddFile(fileToAdd))
-            {
-                FlaggedFiles.Add(new FileProps(fileToAdd));
-                 progress.Report(new ScanProgress(new FileProps(fileToAdd), true));
-            }
+            var fileInfo = new FileInfo(filePath);
+            FlaggedFiles.Add(new FileProps(fileInfo));
+            progress.Report(new ScanProgress(new FileProps(fileInfo), true));
         }
 
-        private bool CanAddDirectory(DirectoryInfo directory)
+        private bool CanAddDirectory(FileSystemInfo directory)
         {
-            var accessTimeCheck = Configuration.IsOverFlagAccessDate(directory.LastAccessTime);
-
-            return (accessTimeCheck);
+            return _configuration.IsOverFlagAccessDate(directory.LastAccessTime);
         }
 
-        private bool CanAddFile(FileInfo fileInfo)
+        private bool CanAddFile(string filePath)
         {
-            var lengthCheck = Configuration.IsOverFlagSize(fileInfo.Length);
-            var accessTimeCheck = Configuration.IsOverFlagAccessDate(fileInfo.LastAccessTime);
-
-            return (lengthCheck && accessTimeCheck);
+            var fileInfo = new FileInfo(filePath);
+            var lengthCheck = _configuration.IsOverFlagSize(fileInfo.Length);
+            var accessTimeCheck = _configuration.IsOverFlagAccessDate(fileInfo.LastAccessTime);
+            return lengthCheck && accessTimeCheck;
         }
 
-        private bool DoNotScan(string path)
-        {
-            return Configuration.PathsNotToScan.Contains(path);
-        }
+        private bool CanScanFile(string path) => 
+            _configuration.PathsNotToScan.Contains(path) == false;
 
         #region Events
         protected virtual void OnScanComplete(EventArgs e)

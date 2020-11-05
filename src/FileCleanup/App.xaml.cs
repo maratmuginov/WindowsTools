@@ -1,17 +1,27 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
+using FileCleanup.Services;
+using FileCleanup.ViewModels;
+using FileCleanup.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FileCleanup
 {
-    /// <summary>
-    /// Interaction logic for App.xaml
-    /// </summary>
-    public partial class App : Application
+    public partial class App
     {
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            var services = ConfigureServices();
+            var mainWindow = new MainWindow
+            {
+                DataContext = services.GetRequiredService<MainWindowViewModel>()
+            };
+            mainWindow.Show();
+        }
+
+        private static IServiceProvider ConfigureServices() => new ServiceCollection()
+            .AddSingleton<MainWindowViewModel>()
+            .AddSingleton<IDialogService, DialogService>()
+                .BuildServiceProvider();
     }
 }

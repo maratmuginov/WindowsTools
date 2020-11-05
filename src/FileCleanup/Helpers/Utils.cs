@@ -1,29 +1,32 @@
-﻿using FileCleanup.Extensions;
-using FileCleanup.Models;
+﻿using FileCleanup.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace FileCleanup.Helpers
 {
     public static class Utils
     {
-        public static FileType GetFileTypeFromExtension(string extension)
+        // TODO : This is too much code, would be easier to maintain if we deserialized it from a file.
+        private static readonly Dictionary<FileType, string[]> FileTypeExtensions = new Dictionary<FileType, string[]>
         {
-            string[] pictureExtensions = {
-                ".jpg",
-                ".jpeg",
-                ".img",
-                ".png",
-                ".gif",
-                ".ai",
-                ".bmp",
-                ".ico",
-                ".ps",
-                ".psd",
-                "svg",
-                ".tiff",
+            {FileType.picture, new[]
+            {
+                ".jpg", 
+                ".jpeg", 
+                ".img", 
+                ".png", 
+                ".gif", 
+                ".ai", 
+                ".bmp", 
+                ".ico", 
+                ".ps", 
+                ".psd", 
+                "svg", 
+                ".tiff", 
                 ".tif"
-            };
-            string[] movieExtensions = {
+            }},
+            {FileType.movie, new []{
                 ".3g2",
                 ".3gp",
                 ".avi",
@@ -39,8 +42,8 @@ namespace FileCleanup.Helpers
                 ".swf",
                 ".vob",
                 ".wmv"
-            };
-            string[] musicExtensions = {
+            }},
+            {FileType.picture, new []{
                 ".mp3",
                 ".aif",
                 ".cda",
@@ -51,8 +54,8 @@ namespace FileCleanup.Helpers
                 ".wav",
                 ".wma",
                 ".wpl"
-            };
-            string[] documentExtensions = {
+            }},
+            {FileType.document, new[]{
                 ".doc",
                 ".docx",
                 ".odt",
@@ -61,13 +64,11 @@ namespace FileCleanup.Helpers
                 ".tex",
                 ".txt",
                 ".wpd"
-            };
-            string[] logExtensions = {
+            }},
+            {FileType.log, new []{
                 ".log"
-            };
-
-            //Newly added categories
-            string[] compressedExtensions = {
+            }},
+            {FileType.compressed, new []{
                 ".7z",
                 ".arj",
                 ".deb",
@@ -77,15 +78,15 @@ namespace FileCleanup.Helpers
                 ".tar.gz",
                 ".z",
                 ".zip"
-            };
-            string[] mediaExtensions = {
+            }},
+            {FileType.media, new []{
                 ".bin",
                 ".dmg",
                 ".iso",
                 ".toast",
                 ".vcd"
-            };
-            string[] dataExtensions = {
+            }},
+            {FileType.data, new []{
                 ".csv",
                 ".dat",
                 ".db",
@@ -95,8 +96,8 @@ namespace FileCleanup.Helpers
                 ".sql",
                 ".tar",
                 ".xml"
-            };
-            string[] emailExtensions = {
+            }},
+            {FileType.email, new []{
                 ".email",
                 ".eml",
                 ".emlx",
@@ -105,8 +106,8 @@ namespace FileCleanup.Helpers
                 ".ost",
                 ".pst",
                 ".vcf"
-            };
-            string[] executableExtensions = {
+            }},
+            {FileType.executable, new []{
                 ".apk",
                 ".bat",
                 ".bin",
@@ -119,16 +120,14 @@ namespace FileCleanup.Helpers
                 ".msi",
                 ".py",
                 ".wsf"
-            };
-
-            string[] fontExtensions = {
+            }},
+            {FileType.font, new[]{
                 ".fnt",
                 ".fon",
                 ".otf",
                 ".ttf"
-            };
-
-            string[] internetExtensions = {
+            }},
+            {FileType.internet, new[]{
                 ".asp",
                 ".aspx",
                 ".cer",
@@ -145,17 +144,15 @@ namespace FileCleanup.Helpers
                 ".py",
                 ".rss",
                 ".xhtml"
-            };
-
-            string[] presentationExtensions = {
+            }},
+            {FileType.presentation, new []{
                 ".key",
                 ".odp",
                 ".pps",
                 ".ppt",
                 ".pptx"
-            };
-
-            string[] codeExtensions = {
+            }},
+            {FileType.code, new[]{
                 ".c",
                 ".cgi",
                 ".pl",
@@ -169,16 +166,16 @@ namespace FileCleanup.Helpers
                 ".sh",
                 ".swift",
                 ".vb"
-            };
-
-            string[] spreadsheetExtensions = {
+            }},
+            {FileType.spreadsheet, new []
+            {
                 ".ods",
                 ".xls",
                 ".xlsm",
                 ".xlsx"
-            };
-
-            string[] systemExtensions = {
+            }},
+            {FileType.system, new []
+            {
                 ".bak",
                 ".cab",
                 ".cfg",
@@ -194,63 +191,19 @@ namespace FileCleanup.Helpers
                 ".msi",
                 ".sys",
                 ".tmp"
-            };
+            }}
+        };
 
-            if (extension.IsIn(pictureExtensions))
-                return FileType.picture;
-            else if (extension.IsIn(movieExtensions))
-                return FileType.movie;
-            else if (extension.IsIn(musicExtensions))
-                return FileType.music;
-            else if (extension.IsIn(documentExtensions))
-                return FileType.document;
-            else if (extension.IsIn(logExtensions))
-                return FileType.log;
-            else if (extension.IsIn(compressedExtensions))
-                return FileType.compressed;
-            else if (extension.IsIn(mediaExtensions))
-                return FileType.media;
-            else if (extension.IsIn(dataExtensions))
-                return FileType.data;
-            else if (extension.IsIn(emailExtensions))
-                return FileType.email;
-            else if (extension.IsIn(executableExtensions))
-                return FileType.executable;
-            else if (extension.IsIn(fontExtensions))
-                return FileType.font;
-            else if (extension.IsIn(internetExtensions))
-                return FileType.internet;
-            else if (extension.IsIn(presentationExtensions))
-                return FileType.presentation;
-            else if (extension.IsIn(codeExtensions))
-                return FileType.code;
-            else if (extension.IsIn(spreadsheetExtensions))
-                return FileType.spreadsheet;
-            else if (extension.IsIn(systemExtensions))
-                return FileType.system;
-            else
-                return FileType.unknown;
-        }
+        public static FileType GetFileTypeFromExtension(string extension) => 
+            FileTypeExtensions.FirstOrDefault(pair => pair.Value.Contains(extension)).Key;
 
-        public static long ConvertSizeToByte(long size, FileSizeType type)
+        public static long ConvertSizeToByte(long size, FileSizeType type) => size * type switch
         {
-            switch (type)
-            {
-                case FileSizeType.Kb:
-                    size *= 1024;
-                    break;
-                case FileSizeType.Mb:
-                    size *= (long)Math.Pow(1024, 2);
-                    break;
-                case FileSizeType.Gb:
-                    size *= (long)Math.Pow(1024, 3);
-                    break;
-                default:
-                    size *= (long)Math.Pow(1024, 4);
-                    break;
-            }
-            return size;
-        }
+            FileSizeType.Kb => 1024,
+            FileSizeType.Mb => (long) Math.Pow(1024, 2),
+            FileSizeType.Gb => (long) Math.Pow(1024, 3),
+            _ => (long) Math.Pow(1024, 4)
+        };
 
         public static FileSizeType ConvertStringToSizeType(string sizeType)
         {

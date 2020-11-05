@@ -1,20 +1,21 @@
-﻿using FileCleanup.Services;
+﻿using System.Windows.Input;
+using FileCleanup.Commands;
+using FileCleanup.Services;
 using FileCleanupDataLib.Models;
-using GalaSoft.MvvmLight.CommandWpf;
 
 namespace FileCleanup.ViewModels
 {
     public class ScanProfileDialogViewModel : DialogViewModelBase<CfgScanProfile>
     {
-        public RelayCommand<IDialogWindow> CreateCommand { get; }
-        public RelayCommand<IDialogWindow> CancelCommand { get; }
+        public ICommand CreateCommand { get; }
+        public ICommand CancelCommand { get; }
 
         public CfgScanProfile ScanProfile { get; set; } = new CfgScanProfile();
 
         public ScanProfileDialogViewModel(string windowTitle, string message) : base(windowTitle, message)
         {
-            CreateCommand = new RelayCommand<IDialogWindow>(Create);
-            CancelCommand = new RelayCommand<IDialogWindow>(Cancel);
+            CreateCommand = new RelayCmd<IDialogWindow>(Create);
+            CancelCommand = new RelayCmd<IDialogWindow>(Cancel);
         }
 
         private void Create(IDialogWindow window) => CloseDialogWithResult(window, ScanProfile);
